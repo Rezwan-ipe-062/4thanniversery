@@ -1,0 +1,354 @@
+
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+#gc { width: 100%; height: 580px; position: relative; overflow: hidden; background: #87CEEB; }
+canvas { display: block; width: 100%; height: 100%; }
+#hud { position: absolute; top: 10px; left: 0; width: 100%; display: flex; justify-content: space-around; pointer-events: none; z-index: 5; }
+.hb { background: rgba(255,255,255,0.85); border-radius: 20px; padding: 5px 14px; font-size: 14px; font-weight: 700; color: #444; font-family: sans-serif; }
+#btns { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); display: flex; gap: 24px; z-index: 5; }
+.cb { width: 64px; height: 64px; border-radius: 50%; background: rgba(255,255,255,0.35); border: 3px solid rgba(255,255,255,0.7); font-size: 24px; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; user-select: none; -webkit-user-select: none; touch-action: none; }
+.cb:active { background: rgba(255,255,255,0.6); }
+#overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(15,40,10,0.88); z-index: 10; font-family: sans-serif; padding: 20px; }
+#overlay h1 { color: #ffe8f0; font-size: 26px; margin-bottom: 6px; text-align: center; }
+#overlay p { color: #b8f0a0; font-size: 13px; text-align: center; margin-bottom: 22px; line-height: 1.6; }
+#overlay button { background: #ff6b9d; color: white; border: none; padding: 14px 44px; border-radius: 50px; font-size: 16px; font-weight: 700; cursor: pointer; }
+#end-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: none; flex-direction: column; align-items: center; justify-content: center; background: rgba(10,5,30,0.93); z-index: 10; font-family: sans-serif; padding: 20px; }
+#end-overlay h1 { color: #ffe8f0; font-size: 22px; margin-bottom: 10px; text-align: center; }
+.lbox { background: rgba(255,255,255,0.07); border: 1.5px solid rgba(255,180,200,0.4); border-radius: 14px; padding: 18px 20px; max-width: 360px; text-align: center; margin-bottom: 18px; }
+.lbox p { color: #f0d0e0; font-size: 13px; line-height: 1.85; }
+.lbox span { color: #ffb3d0; font-weight: 700; }
+#end-overlay button { background: transparent; color: #ff9ec8; border: 2px solid #ff9ec8; padding: 11px 32px; border-radius: 50px; font-size: 14px; cursor: pointer; }
+</style>
+
+<div id="gc">
+  <canvas id="c"></canvas>
+  <div id="hud">
+    <div class="hb">💌 <span id="sc">0</span></div>
+    <div class="hb">❤️ <span id="lv">3</span></div>
+    <div class="hb">⏱ <span id="tm">60</span>s</div>
+  </div>
+  <div id="btns">
+    <div class="cb" id="lb">◀</div>
+    <div class="cb" id="rb">▶</div>
+  </div>
+  <div id="overlay">
+    <h1>For My Edgyyy 💌</h1>
+    <p>4 Years of Love • BUET Garden 🌸<br>Catch love letters 💌, dodge broken hearts 💔<br>Use arrow keys or the buttons below!</p>
+    <button id="startBtn">🌸 Start Playing</button>
+  </div>
+  <div id="end-overlay" id="eo">
+    <div style="font-size:32px;margin-bottom:8px;" id="stars">⭐⭐⭐</div>
+    <h1>Happy 4th Anniversary! 🌸</h1>
+    <div class="lbox"><p id="msg"></p></div>
+    <button id="replayBtn">🔄 Play Again</button>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const gc = document.getElementById('gc');
+
+let W, H;
+function resize() {
+  W = canvas.width = gc.offsetWidth;
+  H = canvas.height = gc.offsetHeight;
+}
+resize();
+
+let score = 0, lives = 3, timeLeft = 60;
+let running = false;
+let items = [];
+let pops = [];
+let dropI, tickI, animId;
+let keys = { l: false, r: false };
+
+const P = { w: 54, h: 76, speed: 6 };
+let px, py;
+
+function init() {
+  score = 0; lives = 3; timeLeft = 60;
+  items = []; pops = [];
+  px = W / 2 - P.w / 2;
+  py = H - 150;
+  document.getElementById('sc').textContent = 0;
+  document.getElementById('lv').textContent = 3;
+  document.getElementById('tm').textContent = 60;
+}
+
+document.getElementById('startBtn').onclick = function() {
+  document.getElementById('overlay').style.display = 'none';
+  resize();
+  init();
+  running = true;
+  dropI = setInterval(spawnItem, 850);
+  tickI = setInterval(() => {
+    if (!running) return;
+    timeLeft--;
+    document.getElementById('tm').textContent = timeLeft;
+    if (timeLeft <= 0) endGame();
+  }, 1000);
+  loop();
+};
+
+document.getElementById('replayBtn').onclick = function() {
+  document.getElementById('end-overlay').style.display = 'none';
+  resize();
+  init();
+  running = true;
+  dropI = setInterval(spawnItem, 850);
+  tickI = setInterval(() => {
+    if (!running) return;
+    timeLeft--;
+    document.getElementById('tm').textContent = timeLeft;
+    if (timeLeft <= 0) endGame();
+  }, 1000);
+  loop();
+};
+
+function spawnItem() {
+  if (!running) return;
+  const bad = Math.random() < 0.28;
+  const goodE = ['💌','💌','💌','🌸','🌺','🌷','💐'];
+  const badE  = ['💔','🌪️'];
+  items.push({
+    x: 24 + Math.random() * (W - 48),
+    y: -28,
+    vy: 2.0 + Math.random() * 1.6 + (60 - timeLeft) * 0.02,
+    e: bad ? badE[Math.floor(Math.random()*badE.length)] : goodE[Math.floor(Math.random()*goodE.length)],
+    bad,
+    rot: 0,
+    rv: (Math.random() - 0.5) * 0.05
+  });
+}
+
+function drawBG() {
+  // Sky
+  const g = ctx.createLinearGradient(0, 0, 0, H * 0.62);
+  g.addColorStop(0, '#5bb8f5');
+  g.addColorStop(1, '#aee87a');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H * 0.62);
+
+  // Ground
+  ctx.fillStyle = '#3d7a1e';
+  ctx.fillRect(0, H * 0.62, W, H);
+
+  // Grass tufts
+  ctx.fillStyle = '#4e9428';
+  for (let gx = 0; gx <= W; gx += 16) {
+    ctx.beginPath();
+    ctx.moveTo(gx, H * 0.62);
+    ctx.lineTo(gx + 8, H * 0.62 - 9);
+    ctx.lineTo(gx + 16, H * 0.62);
+    ctx.fill();
+  }
+
+  // Sun
+  ctx.fillStyle = '#ffe033';
+  ctx.beginPath(); ctx.arc(W - 60, 52, 30, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#fff7a0';
+  ctx.beginPath(); ctx.arc(W - 60, 52, 20, 0, Math.PI*2); ctx.fill();
+
+  // Cloud 1
+  drawCloud(100, 70, 1);
+  drawCloud(W - 160, 55, 0.85);
+
+  // Flowers on ground
+  flower(40, H * 0.62 + 2, '#ff6b9d');
+  flower(W - 40, H * 0.62 + 2, '#ff9e2c');
+  flower(W/2 - 55, H * 0.62 + 4, '#c879ff');
+  flower(W/2 + 55, H * 0.62 + 4, '#ff6b9d');
+
+  // BUET sign
+  ctx.fillStyle = 'rgba(255,255,255,0.2)';
+  roundRect(ctx, W/2 - 75, 8, 150, 24, 12);
+  ctx.fill();
+  ctx.fillStyle = '#1a4a08';
+  ctx.font = 'bold 11px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('🎓 BUET Garden 🎓', W/2, 24);
+  ctx.textAlign = 'left';
+}
+
+function drawCloud(cx, cy, s) {
+  ctx.fillStyle = 'rgba(255,255,255,0.88)';
+  [[0,0,22],[20,-5,17],[40,0,20],[58,0,16]].forEach(([dx,dy,r]) => {
+    ctx.beginPath(); ctx.arc(cx+dx*s, cy+dy*s, r*s, 0, Math.PI*2); ctx.fill();
+  });
+}
+
+function flower(x, y, col) {
+  ctx.fillStyle = '#4e9428';
+  ctx.fillRect(x-2, y, 4, 18);
+  ctx.fillStyle = col;
+  for (let a = 0; a < 5; a++) {
+    const ang = (a/5)*Math.PI*2;
+    ctx.beginPath();
+    ctx.ellipse(x+Math.cos(ang)*7, y+Math.sin(ang)*7, 4.5, 4.5, ang, 0, Math.PI*2);
+    ctx.fill();
+  }
+  ctx.fillStyle = '#FFD700';
+  ctx.beginPath(); ctx.arc(x, y, 4.5, 0, Math.PI*2); ctx.fill();
+}
+
+function roundRect(c, x, y, w, h, r) {
+  c.beginPath();
+  c.moveTo(x+r, y);
+  c.lineTo(x+w-r, y); c.arcTo(x+w, y, x+w, y+r, r);
+  c.lineTo(x+w, y+h-r); c.arcTo(x+w, y+h, x+w-r, y+h, r);
+  c.lineTo(x+r, y+h); c.arcTo(x, y+h, x, y+h-r, r);
+  c.lineTo(x, y+r); c.arcTo(x, y, x+r, y, r);
+  c.closePath();
+}
+
+function drawPlayer() {
+  const cx = px + P.w / 2;
+  const y = py;
+
+  // Body
+  ctx.fillStyle = '#7b4fa0';
+  ctx.beginPath();
+  ctx.moveTo(cx-16, y+34); ctx.lineTo(cx+16, y+34);
+  ctx.lineTo(cx+20, y+P.h); ctx.lineTo(cx-20, y+P.h);
+  ctx.closePath(); ctx.fill();
+
+  // Arms
+  ctx.strokeStyle = '#f5c7a0'; ctx.lineWidth = 6; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(cx-14, y+40); ctx.lineTo(cx-25, y+56); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx+14, y+40); ctx.lineTo(cx+25, y+56); ctx.stroke();
+
+  // Basket
+  ctx.fillStyle = '#c8a060';
+  roundRect(ctx, cx-13, y+53, 26, 13, 4); ctx.fill();
+
+  // Hijab
+  ctx.fillStyle = '#2e6dc4';
+  ctx.beginPath(); ctx.ellipse(cx, y+18, 19, 22, 0, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(cx-18, y+26); ctx.quadraticCurveTo(cx-24, y+38, cx-18, y+43);
+  ctx.lineTo(cx+18, y+43); ctx.quadraticCurveTo(cx+24, y+38, cx+18, y+26);
+  ctx.closePath(); ctx.fill();
+
+  // Face
+  ctx.fillStyle = '#fde2c0';
+  ctx.beginPath(); ctx.ellipse(cx, y+17, 12, 14, 0, 0, Math.PI*2); ctx.fill();
+
+  // Glasses
+  ctx.strokeStyle = '#444'; ctx.lineWidth = 1.8;
+  roundRect(ctx, cx-13, y+13, 10, 7, 2); ctx.stroke();
+  roundRect(ctx, cx+3, y+13, 10, 7, 2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx-3, y+17); ctx.lineTo(cx+3, y+17); ctx.stroke();
+
+  // Eyes
+  ctx.fillStyle = '#2a2a2a';
+  ctx.beginPath(); ctx.arc(cx-8, y+17, 1.8, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(cx+8, y+17, 1.8, 0, Math.PI*2); ctx.fill();
+
+  // Smile
+  ctx.strokeStyle = '#b06040'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(cx, y+23, 4.5, 0.2, Math.PI-0.2); ctx.stroke();
+}
+
+function loop() {
+  if (!running) return;
+
+  // Move player
+  if (keys.l) px = Math.max(0, px - P.speed);
+  if (keys.r) px = Math.min(W - P.w, px + P.speed);
+
+  // Move & check items
+  const catchX = px + P.w/2;
+  const catchY = py + 50;
+  items.forEach(it => { it.y += it.vy; it.rot += it.rv; });
+
+  items = items.filter(it => {
+    if (Math.abs(it.x - catchX) < 32 && Math.abs(it.y - catchY) < 32) {
+      if (it.bad) {
+        lives = Math.max(0, lives - 1);
+        document.getElementById('lv').textContent = lives;
+        pops.push({ x: it.x, y: it.y, t: '💔 Ouch!', a: 1, col: '#ff4444' });
+        if (lives <= 0) { endGame(); return false; }
+      } else {
+        score++;
+        document.getElementById('sc').textContent = score;
+        pops.push({ x: it.x, y: it.y, t: '+1 💌', a: 1, col: '#ff6b9d' });
+      }
+      return false;
+    }
+    return it.y < H + 40;
+  });
+
+  // Draw
+  ctx.clearRect(0, 0, W, H);
+  drawBG();
+
+  // Items
+  items.forEach(it => {
+    ctx.save();
+    ctx.translate(it.x, it.y);
+    ctx.rotate(it.rot);
+    ctx.font = '26px serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(it.e, 0, 0);
+    ctx.restore();
+  });
+
+  drawPlayer();
+
+  // Pops
+  pops = pops.filter(p => p.a > 0);
+  pops.forEach(p => {
+    ctx.globalAlpha = p.a;
+    ctx.font = 'bold 14px sans-serif';
+    ctx.fillStyle = p.col;
+    ctx.textAlign = 'center';
+    ctx.fillText(p.t, p.x, p.y);
+    ctx.globalAlpha = 1;
+    p.y -= 0.8; p.a -= 0.025;
+  });
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+
+  animId = requestAnimationFrame(loop);
+}
+
+function endGame() {
+  running = false;
+  cancelAnimationFrame(animId);
+  clearInterval(dropI);
+  clearInterval(tickI);
+
+  const eo = document.getElementById('end-overlay');
+  eo.style.display = 'flex';
+  document.getElementById('stars').textContent = score >= 25 ? '⭐⭐⭐' : score >= 12 ? '⭐⭐' : '⭐';
+
+  const msgs = [
+    `Dear <span>Edgyyy (Era)</span>,<br><br>You caught every letter I wrote for you. Just like you caught my heart in the hallways of <span>BUET</span>. 🌸<br><br>A boy from <span>Chittagong</span> fell helplessly in love with a beautiful hijabi girl from <span>Rajshahi</span> — and he'd fall all over again.<br><br><span>4 years down, forever to go. Happy Anniversary! 💌</span>`,
+    `Dear <span>Edgyyy</span>,<br><br>You caught plenty of my love letters — just like you caught my heart at <span>BUET</span>. 🌸<br><br>From <span>Rajshahi</span> to <span>Chittagong</span>, every distance only made me love you more.<br><br><span>Happy 4th Anniversary! 💌</span>`,
+    `Dear <span>Era</span>,<br><br>Even if not all letters were caught, my whole heart already belongs to you. 🌸<br><br>Since our days at <span>BUET</span> — the boy from <span>Chittagong</span> never stopped loving his Edgyyy.<br><br><span>Happy Anniversary! 💌</span>`
+  ];
+  const idx = score >= 25 ? 0 : score >= 12 ? 1 : 2;
+  document.getElementById('msg').innerHTML = msgs[idx];
+}
+
+// Keyboard
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowLeft')  { keys.l = true; e.preventDefault(); }
+  if (e.key === 'ArrowRight') { keys.r = true; e.preventDefault(); }
+});
+document.addEventListener('keyup', e => {
+  if (e.key === 'ArrowLeft')  keys.l = false;
+  if (e.key === 'ArrowRight') keys.r = false;
+});
+
+// Touch buttons
+const lb = document.getElementById('lb');
+const rb = document.getElementById('rb');
+lb.addEventListener('pointerdown', e => { keys.l = true; e.preventDefault(); });
+lb.addEventListener('pointerup',   () => keys.l = false);
+lb.addEventListener('pointerleave',() => keys.l = false);
+rb.addEventListener('pointerdown', e => { keys.r = true; e.preventDefault(); });
+rb.addEventListener('pointerup',   () => keys.r = false);
+rb.addEventListener('pointerleave',() => keys.r = false);
+</script>
